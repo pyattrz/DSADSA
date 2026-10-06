@@ -2328,17 +2328,17 @@ local Library = { } do
         local TopH = 51
         local Gap = 8
         local RailW = W - 20
-        local RailH = 42
+        local RailH = 48
         local SubW = W - 20
-        local SubH = 42
+        local SubH = 48
         local MainX = 0
-        local RailY = TopH + 6
         local SubX = 10
-        local SubY = H - SubH - 8
+        local SubY = TopH + 6
+        local RailY = H - RailH - 8
         local RootW = W
         local RootH = H
-        local ContentTop = RailY + RailH + 8
-        local ContentBottom = SubH + 16
+        local ContentTop = SubY + SubH + 8
+        local ContentBottom = RailH + 18
         local ContentAreaH = H - ContentTop - ContentBottom
         local ColW = math.floor((W - 46) / 2)
         local Col2X = ColW + 16
@@ -2425,15 +2425,17 @@ local Library = { } do
             Z = 3
         })
 
+        -- Current hub/logo removed for now. Keep a hidden placeholder for compatibility.
         Items.HubIcon = MakeImage({
             Parent = Items.TopBar.Instance,
             Icon = Window.Icon,
-            Pos = UDim2.fromOffset(10, 10),
-            Size = UDim2.fromOffset(30, 30),
+            Pos = UDim2.fromOffset(0, 0),
+            Size = UDim2.fromOffset(0, 0),
             Raw = Color3.new(1, 1, 1),
             Fit = true,
             Z = 3
         })
+        Items.HubIcon.Instance.Visible = false
 
         -- Top search removed. Keep tiny hidden placeholders so older code paths stay compatible.
         Items.Search = MakeFrame({ Parent = Items.TopBar.Instance, Size = UDim2.fromOffset(0, 0), Z = 3 })
@@ -3004,7 +3006,7 @@ local Library = { } do
                 local Width = Tab.Active and ActiveWidth or CollapsedWidth
                 Tab.Items.Row.Instance.Position = UDim2.fromOffset(X, 3)
                 Tab.Items.Row.Instance.Size = UDim2.fromOffset(Width, 34)
-                Tab.Items.Bar.Instance.Position = UDim2.fromOffset(X + 8, 39)
+                -- Active page is shown by the button itself; no underline indicator.
                 X += Width + Spacing
             end
         end
@@ -3168,7 +3170,7 @@ local Library = { } do
         Items.Row = MakeFrame({
             Parent = Window.Items.Rail.Instance,
             Pos = UDim2.fromOffset(8, RowY),
-            Size = UDim2.fromOffset(CollapsedW, 34),
+            Size = UDim2.fromOffset(CollapsedW, 40),
             Color = "Element",
             Round = 8,
             Clip = true,
@@ -3193,6 +3195,7 @@ local Library = { } do
             UDim.new(0, 10),
             0
         )
+        Items.Bar.Instance.Visible = false
 
         if Items.BarShadow then
             SetRest(Items.BarShadow, "Transparency", 1)
@@ -3276,8 +3279,8 @@ local Library = { } do
             Library:StampResting(Items.Row.Instance, "BackgroundTransparency", Active and 0 or 1)
 
             if Items.BarShadow then
-                Library:StampResting(Items.BarShadow, "Transparency", Active and 0 or 1)
-                Items.BarShadow.Transparency = Active and 0 or 1
+                Library:StampResting(Items.BarShadow, "Transparency", 1)
+                Items.BarShadow.Transparency = 1
             end
 
             Items.Icon:ChangeItemTheme({ ImageColor3 = Active and "Accent" or "DimIcon" })
@@ -3285,9 +3288,9 @@ local Library = { } do
                 ImageColor3 = Active and Library.Theme.Accent or Library.Theme.DimIcon
             })
 
-            Items.Row:Tween({ BackgroundTransparency = Active and 0 or 1, Size = UDim2.fromOffset(Active and Tab.ExpandedW or Tab.CollapsedW, 34) })
+            Items.Row:Tween({ BackgroundTransparency = Active and 0 or 1, Size = UDim2.fromOffset(Active and Tab.ExpandedW or Tab.CollapsedW, 40) })
             Items.Label:Tween({ TextTransparency = Active and 0 or 1 })
-            Items.Bar:Tween({ Size = UDim2.fromOffset(Active and 16 or 0, 3) })
+            Items.Bar.Instance.Visible = false
             task.defer(function() Window:LayoutRail() end)
         end
 
@@ -3392,7 +3395,7 @@ local Library = { } do
 
         Items.Pill = MakeFrame({
             Parent = Tab.Items.SubRow.Instance,
-            Size = UDim2.fromOffset(CollapsedW, 30),
+            Size = UDim2.fromOffset(CollapsedW, 36),
             Color = "Element",
             Round = 5,
             Clip = true,
@@ -3434,7 +3437,7 @@ local Library = { } do
             Items.Label.Instance.Size = UDim2.fromOffset(Bounds + 8, 20)
 
             if Tab.Current == SubTab then
-                Items.Pill.Instance.Size = UDim2.fromOffset(ExpandedW, 30)
+                Items.Pill.Instance.Size = UDim2.fromOffset(ExpandedW, 36)
                 Window:FitSubBar(true)
             end
         end
@@ -3505,7 +3508,7 @@ local Library = { } do
 
             local Width = Active and ExpandedW or CollapsedW
 
-            Library:Tween({ Size = UDim2.fromOffset(Width, 30) }, Info, Items.Pill.Instance)
+            Library:Tween({ Size = UDim2.fromOffset(Width, 36) }, Info, Items.Pill.Instance)
             Library:Tween({ TextTransparency = Active and 0 or 1 }, Info, Items.Label.Instance)
 
             Items.Icon:ChangeItemTheme({ ImageColor3 = Active and "Accent" or "DimIcon" })
