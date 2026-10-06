@@ -2437,6 +2437,38 @@ local Library = { } do
         })
         Items.HubIcon.Instance.Visible = false
 
+        -- Animated title in the top-left. Re-types forever without blocking the UI.
+        Items.Title = MakeText({
+            Parent = Items.TopBar.Instance,
+            Text = "",
+            TextSize = 17,
+            Pos = UDim2.fromOffset(14, 0),
+            Size = UDim2.fromOffset(math.floor(W * 0.48), TopH),
+            Color = "Text",
+            Align = Enum.TextXAlignment.Left,
+            Truncate = true,
+            Z = 4
+        })
+
+        Library:Thread(function()
+            local FullTitle = tostring(Window.Name)
+            while Items.Title.Instance.Parent do
+                Items.Title.Instance.Text = ""
+                for I = 1, #FullTitle do
+                    if not Items.Title.Instance.Parent then return end
+                    Items.Title.Instance.Text = string.sub(FullTitle, 1, I)
+                    task.wait(0.07)
+                end
+                task.wait(1.15)
+                for I = #FullTitle - 1, 0, -1 do
+                    if not Items.Title.Instance.Parent then return end
+                    Items.Title.Instance.Text = string.sub(FullTitle, 1, I)
+                    task.wait(0.035)
+                end
+                task.wait(0.35)
+            end
+        end)
+
         -- Top search removed. Keep tiny hidden placeholders so older code paths stay compatible.
         Items.Search = MakeFrame({ Parent = Items.TopBar.Instance, Size = UDim2.fromOffset(0, 0), Z = 3 })
         Items.Search.Instance.Visible = false
@@ -2444,7 +2476,7 @@ local Library = { } do
 
         Items.Username = MakeText({
             Parent = Items.TopBar.Instance,
-            Text = LocalPlayer.DisplayName,
+            Text = "",
             TextSize = 15,
             Anchor = Vector2.new(1, 0),
             Pos = UDim2.new(1, -56, 0, 8),
@@ -2544,7 +2576,7 @@ local Library = { } do
 
         MakeText({
             Parent = ProfilePanel.Instance,
-            Text = LocalPlayer.DisplayName,
+            Text = "",
             TextSize = 15,
             Pos = UDim2.fromOffset(68, 16),
             Size = UDim2.fromOffset(ProfileW - 82, 20),
@@ -2555,7 +2587,7 @@ local Library = { } do
 
         MakeText({
             Parent = ProfilePanel.Instance,
-            Text = "@" .. LocalPlayer.Name,
+            Text = "",
             TextSize = 13,
             Pos = UDim2.fromOffset(68, 37),
             Size = UDim2.fromOffset(ProfileW - 82, 16),
@@ -3199,7 +3231,6 @@ local Library = { } do
 
         if Items.BarShadow then
             SetRest(Items.BarShadow, "Transparency", 1)
-            Items.BarShadow.Visible = false
         end
 
         Items.Icon = MakeImage({
@@ -3282,7 +3313,6 @@ local Library = { } do
             if Items.BarShadow then
                 Library:StampResting(Items.BarShadow, "Transparency", 1)
                 Items.BarShadow.Transparency = 1
-                Items.BarShadow.Visible = false
             end
 
             Items.Icon:ChangeItemTheme({ ImageColor3 = Active and "Accent" or "DimIcon" })
@@ -4550,11 +4580,15 @@ local Library = { } do
 
         local Section = Self
 
+        local SliderLiveProvider = type(Params.Value) == "function" and Params.Value
+            or (type(Params.Refresh) == "function" and Params.Refresh)
+        local SliderDefault = type(Params.Default) == "number" and Params.Default or 0
+
         local Slider = {
             Name = Params.Name or "Slider",
             Min = Params.Min or 0,
             Max = Params.Max or 100,
-            Default = Params.Default or 0,
+            Default = SliderDefault,
             Decimals = Params.Decimals or 1,
             Suffix = Params.Suffix or "",
             Flag = Params.Flag,
@@ -4618,6 +4652,21 @@ local Library = { } do
             Library.SetFlags[Slider.Flag] = function(Value)
                 Slider:Set(Value)
             end
+        end
+
+        if SliderLiveProvider then
+            Library:Thread(function()
+                while Items.Row.Instance.Parent do
+                    if not Slider.Sliding then
+                        local Ok, Value = pcall(SliderLiveProvider)
+                        if Ok and type(Value) == "number" then
+                            local Next = Library:Round(math.clamp(Value, Slider.Min, Slider.Max), Slider.Decimals)
+                            if Next ~= Slider.Value then Slider:Set(Next, true) end
+                        end
+                    end
+                    task.wait(1)
+                end
+            end)
         end
 
         return setmetatable(Slider, Library)
@@ -4831,6 +4880,24 @@ local Library = { } do
             Dropdown.Value = { }
         end
 
+        -- Player dropdowns refresh automatically even when a static list was originally supplied.
+        -- Other changing dropdowns can pass Items/Options/Refresh as a function and are polled every second.
+        if Dropdown.OptionsProvider == nil then
+            local LowerName = string.lower(tostring(Dropdown.Name))
+            if string.find(LowerName, "player", 1, true) then
+                Dropdown.OptionsProvider = function()
+                    local List = { }
+                    for _, Player in Players:GetPlayers() do
+                        if Player ~= LocalPlayer then
+                            table.insert(List, Player.Name)
+                        end
+                    end
+                    table.sort(List, function(A, B) return string.lower(A) < string.lower(B) end)
+                    return List
+                end
+            end
+        end
+
         local Items = MakeFieldRow(Section, Dropdown.Name)
 
         Items.Selected = MakeText({
@@ -4912,11 +4979,46 @@ local Library = { } do
         end
 
         function Dropdown:Refresh(List)
+            List = type(List) == "table" and List or { }
+            local OldValue = Dropdown.Value
+
             Popup:Clear()
             Dropdown.Options = List
 
             for _, Option in List do
                 Popup:AddRow(tostring(Option))
+            end
+
+            if Dropdown.Multi then
+                local Kept = { }
+                for _, Value in OldValue or { } do
+                    for _, Option in List do
+                        if tostring(Option) == tostring(Value) then
+                            table.insert(Kept, tostring(Value))
+                            break
+                        end
+                    end
+                end
+                Dropdown.Value = Kept
+                for _, Data in Popup.Order do
+                    Data:Set(table.find(Kept, Data.Name) ~= nil, true)
+                end
+                Report()
+            elseif OldValue ~= nil then
+                local StillExists = false
+                for _, Option in List do
+                    if tostring(Option) == tostring(OldValue) then
+                        StillExists = true
+                        break
+                    end
+                end
+                if StillExists then
+                    Dropdown.Value = tostring(OldValue)
+                    for _, Data in Popup.Order do Data:Set(Data.Name == Dropdown.Value, true) end
+                else
+                    Dropdown.Value = nil
+                end
+                Report()
             end
         end
 
@@ -4974,7 +5076,7 @@ local Library = { } do
 
         if type(Dropdown.OptionsProvider) == "function" then
             Library:Thread(function()
-                while Row.Instance.Parent do
+                while Items.Row.Instance.Parent do
                     local Ok, NewList = pcall(Dropdown.OptionsProvider)
                     if Ok and type(NewList) == "table" then
                         local Changed = #NewList ~= #Dropdown.Options
@@ -5370,9 +5472,14 @@ local Library = { } do
 
         local Section = Self
 
+        local LiveProvider = type(Params.Text) == "function" and Params.Text
+            or (type(Params.Value) == "function" and Params.Value)
+            or (type(Params.Refresh) == "function" and Params.Refresh)
+
         local Label = {
             Name = Params.Name or "Label",
-            Items = { }
+            Items = { },
+            LiveProvider = LiveProvider
         }
 
         local Row = Section:AddRow(24, Label.Name)
@@ -5391,6 +5498,16 @@ local Library = { } do
 
         function Label:Set(Text)
             Label.Items.Text.Instance.Text = tostring(Text)
+        end
+
+        if Label.LiveProvider then
+            Library:Thread(function()
+                while Row.Instance.Parent do
+                    local Ok, Value = pcall(Label.LiveProvider)
+                    if Ok and Value ~= nil then Label:Set(Value) end
+                    task.wait(1)
+                end
+            end)
         end
 
         return setmetatable(Label, Library)
