@@ -2624,20 +2624,11 @@ end
 
         Library:Thread(function()
             local FullTitle = tostring(Window.Name)
-            while Items.Title.Instance.Parent do
-                Items.Title.Instance.Text = ""
-                for I = 1, #FullTitle do
-                    if not Items.Title.Instance.Parent then return end
-                    Items.Title.Instance.Text = string.sub(FullTitle, 1, I)
-                    task.wait(0.07)
-                end
-                task.wait(1.15)
-                for I = #FullTitle - 1, 0, -1 do
-                    if not Items.Title.Instance.Parent then return end
-                    Items.Title.Instance.Text = string.sub(FullTitle, 1, I)
-                    task.wait(0.035)
-                end
-                task.wait(0.35)
+            Items.Title.Instance.Text = ""
+            for I = 1, #FullTitle do
+                if not Items.Title.Instance.Parent then return end
+                Items.Title.Instance.Text = string.sub(FullTitle, 1, I)
+                task.wait(0.055)
             end
         end)
 
@@ -4836,7 +4827,7 @@ end
                             if Next ~= Slider.Value then Slider:Set(Next, true) end
                         end
                     end
-                    task.wait(1)
+                    task.wait(Library.Holder.Instance.Enabled and 1.25 or 2.5)
                 end
             end)
         end
@@ -5270,7 +5261,7 @@ end
                         end
                         if Changed then Dropdown:Refresh(NewList) end
                     end
-                    task.wait(1)
+                    task.wait((Library.Holder.Instance.Enabled and Popup.IsOpen) and 0.75 or 2.0)
                 end
             end)
         end
@@ -5688,7 +5679,7 @@ end
                 while Row.Instance.Parent do
                     local Ok, Value = pcall(Label.LiveProvider)
                     if Ok and Value ~= nil then Label:Set(Value) end
-                    task.wait(1)
+                    task.wait(Library.Holder.Instance.Enabled and 1.25 or 2.5)
                 end
             end)
         end
@@ -6545,7 +6536,9 @@ end
         local Frames = 0
 
         Library:Connect(RunService.RenderStepped, function()
-            Frames += 1
+            if Items.Bar.Instance.Visible then
+                Frames += 1
+            end
         end)
 
         Library:Thread(function()
@@ -6682,20 +6675,24 @@ end
         return Result
     end
 
-    Library:Connect(RunService.Heartbeat, function(Delta)
-        if Library.ThemeDirty then
-            Library.ThemeDirty = false
-            Library:ApplyThemeInstant()
-        end
+    -- Low-frequency UI maintenance. This used to run every Heartbeat/frame.
+    Library:Thread(function()
+        while true do
+            if Library.ThemeDirty then
+                Library.ThemeDirty = false
+                Library:ApplyThemeInstant()
+            end
 
-        if not Library.PreloadDirty then return end
+            if Library.PreloadDirty then
+                Library.PreloadClock += 0.10
+                if Library.PreloadClock >= 0.40 then
+                    Library.PreloadDirty = false
+                    Library.PreloadClock = 0
+                    Library:PreloadAll()
+                end
+            end
 
-        Library.PreloadClock += Delta or 0
-
-        if Library.PreloadClock >= 0.35 then
-            Library.PreloadDirty = false
-            Library.PreloadClock = 0
-            Library:PreloadAll()
+            task.wait(0.10)
         end
     end)
 
