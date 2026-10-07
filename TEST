@@ -210,7 +210,7 @@ local Library = { } do
         Text = Color3.fromRGB(255, 255, 255),
         DimText = Color3.fromRGB(158, 158, 166),
         DimIcon = Color3.fromRGB(145, 145, 153),
-        Accent = Color3.fromRGB(225, 35, 45)
+        Accent = Color3.fromRGB(220, 40, 40)
     }
 
     Library.AccentPresets = {
@@ -890,6 +890,124 @@ local Library = { } do
         IgnoreGuiInset = true,
         DisplayOrder = 1001
     })
+
+-- Floating UI toggle button (mobile + PC)
+do
+    local ToggleGui = Instance.new("ScreenGui")
+    ToggleGui.Name = "ZolarFloatingToggle"
+    ToggleGui.ResetOnSpawn = false
+    ToggleGui.IgnoreGuiInset = true
+    ToggleGui.DisplayOrder = 100000
+    ToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+    ToggleGui.Parent = GetHui()
+
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Name = "Toggle"
+    ToggleButton.Parent = ToggleGui
+    ToggleButton.Size = UDim2.fromOffset(52, 52)
+    ToggleButton.Position = UDim2.new(0, 18, 0.5, -26)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 25, 25)
+    ToggleButton.BorderSizePixel = 0
+    ToggleButton.AutoButtonColor = false
+    ToggleButton.Text = "UI"
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.TextSize = 16
+    ToggleButton.Font = Enum.Font.GothamBold
+    ToggleButton.Active = true
+    ToggleButton.ZIndex = 100000
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 10)
+    Corner.Parent = ToggleButton
+
+    local Stroke = Instance.new("UIStroke")
+    Stroke.Thickness = 1
+    Stroke.Transparency = 0.25
+    Stroke.Color = Color3.fromRGB(235, 70, 70)
+    Stroke.Parent = ToggleButton
+
+    local dragging = false
+    local dragInput = nil
+    local dragStart = nil
+    local startPos = nil
+    local moved = false
+
+    ToggleButton.InputBegan:Connect(function(input)
+        local kind = input.UserInputType
+        if kind ~= Enum.UserInputType.Touch and kind ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        dragging = true
+        dragInput = input
+        dragStart = input.Position
+        startPos = ToggleButton.Position
+        moved = false
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging or not dragStart or not startPos then
+            return
+        end
+
+        if input.UserInputType ~= Enum.UserInputType.Touch
+            and input.UserInputType ~= Enum.UserInputType.MouseMovement then
+            return
+        end
+
+        local delta = input.Position - dragStart
+        if math.abs(delta.X) > 6 or math.abs(delta.Y) > 6 then
+            moved = true
+        end
+
+        if moved then
+            local camera = workspace.CurrentCamera
+            local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+            local width = ToggleButton.AbsoluteSize.X
+            local height = ToggleButton.AbsoluteSize.Y
+
+            local x = math.clamp(startPos.X.Offset + delta.X, 4, math.max(4, viewport.X - width - 4))
+            local y = math.clamp(startPos.Y.Offset + delta.Y, 4, math.max(4, viewport.Y - height - 4))
+
+            ToggleButton.Position = UDim2.fromOffset(x, y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if not dragging then
+            return
+        end
+
+        local kind = input.UserInputType
+        if kind ~= Enum.UserInputType.Touch and kind ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        dragging = false
+        dragInput = nil
+        dragStart = nil
+        startPos = nil
+    end)
+
+    ToggleButton.Activated:Connect(function()
+        if moved then
+            moved = false
+            return
+        end
+
+        Library.Holder.Instance.Enabled = not Library.Holder.Instance.Enabled
+
+        if not Library.Holder.Instance.Enabled then
+            Library.PopupHolder.Instance.Enabled = false
+        else
+            Library.PopupHolder.Instance.Enabled = true
+        end
+    end)
+
+    Library.FloatingToggleGui = ToggleGui
+    Library.FloatingToggleButton = ToggleButton
+end
+
 
     Library.UnusedHolder = Library:Create("ScreenGui", {
         Parent = GetHui(),
