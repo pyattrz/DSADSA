@@ -1,4 +1,3 @@
-```
 if getgenv().Zolar and getgenv().Zolar.Unload then
     getgenv().Zolar:Unload()
 end
@@ -6701,4 +6700,3 @@ end
 end
 
 return Library
-```
