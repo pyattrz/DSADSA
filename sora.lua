@@ -3255,7 +3255,7 @@ end
             if #Tab.Subs == 0 then return end
 
             local ContentScale = Library:GetScreenScale()
-            local Content = Tab.SubLayout.AbsoluteContentSize.X + 20
+            local Content = Tab.SubLayout.AbsoluteContentSize.X + 16
             local Overflow = Content > MaxSubW
             local Row = Tab.Items.SubRow.Instance
             Row.ScrollingEnabled = true
@@ -3487,7 +3487,7 @@ end
             HorizontalAlignment = Enum.HorizontalAlignment.Left,
             VerticalAlignment = Enum.VerticalAlignment.Center,
             SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 6)
+            Padding = UDim.new(0, 4)
         })
 
         Library:Create("UIPadding", {
@@ -3624,8 +3624,14 @@ end
         local ColW = Window.ColW
         local Col2X = Window.Col2X
 
-        local TextW = math.ceil(MeasureText(SubTab.Name, 15, 300, UiFont).X)
-        local ExpandedW = 37 + TextW + 12
+        local SubFontSize = 13
+        local SubHeight = 28
+        local IconSize = 14
+        local IconLeft = 9
+        local LabelLeft = 29
+        local RightPadding = 11
+        local TextW = math.ceil(MeasureText(SubTab.Name, SubFontSize, 1000, UiFont).X)
+        local ExpandedW = LabelLeft + TextW + RightPadding
         local CollapsedW = ExpandedW
 
         SubTab.CollapsedW = CollapsedW
@@ -3633,7 +3639,7 @@ end
 
         Items.Pill = MakeFrame({
             Parent = Tab.Items.SubRow.Instance,
-            Size = UDim2.fromOffset(CollapsedW, 36),
+            Size = UDim2.fromOffset(ExpandedW, SubHeight),
             Color = "Element",
             Round = 5,
             Clip = true,
@@ -3647,8 +3653,8 @@ end
             Parent = Items.Pill.Instance,
             Icon = SubTab.Icon,
             Anchor = Vector2.new(0, 0.5),
-            Pos = UDim2.new(0, 11, 0.5, 0),
-            Size = UDim2.fromOffset(18, 18),
+            Pos = UDim2.new(0, IconLeft, 0.5, 0),
+            Size = UDim2.fromOffset(IconSize, IconSize),
             Color = "DimIcon",
             Z = 23
         })
@@ -3656,10 +3662,10 @@ end
         Items.Label = MakeText({
             Parent = Items.Pill.Instance,
             Text = SubTab.Name,
-            TextSize = 15,
+            TextSize = SubFontSize,
             Anchor = Vector2.new(0, 0.5),
-            Pos = UDim2.new(0, 37, 0.5, 0),
-            Size = UDim2.fromOffset(TextW + 8, 20),
+            Pos = UDim2.new(0, LabelLeft, 0.5, 0),
+            Size = UDim2.fromOffset(TextW + 2, 18),
             Color = "Text",
             Z = 23
         })
@@ -3669,12 +3675,11 @@ end
         local function SyncWidth()
             local Bounds = math.ceil(Items.Label.Instance.TextBounds.X)
             if Bounds <= 0 then return end
-
-            ExpandedW = 37 + Bounds + 12
+            ExpandedW = LabelLeft + Bounds + RightPadding
             SubTab.ExpandedW = ExpandedW
-            Items.Label.Instance.Size = UDim2.fromOffset(Bounds + 8, 20)
-
-            Items.Pill.Instance.Size = UDim2.fromOffset(ExpandedW, 36)
+            SubTab.CollapsedW = ExpandedW
+            Items.Label.Instance.Size = UDim2.fromOffset(Bounds + 2, 18)
+            Items.Pill.Instance.Size = UDim2.fromOffset(ExpandedW, SubHeight)
             if Window.Current == Tab then Window:FitSubBar(true) end
         end
 
@@ -3744,7 +3749,7 @@ end
 
             local Width = ExpandedW
 
-            Library:Tween({ Size = UDim2.fromOffset(Width, 36) }, Info, Items.Pill.Instance)
+            Library:Tween({ Size = UDim2.fromOffset(Width, SubHeight) }, Info, Items.Pill.Instance)
             Library:Tween({ TextTransparency = 0 }, Info, Items.Label.Instance)
 
             Items.Icon:ChangeItemTheme({ ImageColor3 = Active and "Accent" or "DimIcon" })
@@ -3842,7 +3847,7 @@ end
             for _, Column in SubTab.Columns do
                 for _, Section in Column.Sections do
                     Section.Items.Holder.Instance.Position = UDim2.fromOffset(0, Section.Y)
-                    Section.Items.Frame.Instance.Position = UDim2.fromOffset(0, 26)
+                    Section.Items.Frame.Instance.Position = UDim2.fromOffset(0, 0)
 
                     for _, Data in Section.Rows do
                         Data.Frame:CancelFade()
@@ -3973,73 +3978,30 @@ end
             Z = 3
         })
 
-        local HeaderTextW = math.ceil(MeasureText(Section.Name, 15, 240, UiFont).X)
-        local HeaderW = HeaderTextW + 26
-
-        Items.Header = MakeFrame({
+        Items.Frame = MakeFrame({
             Parent = Items.Holder.Instance,
-            Pos = UDim2.fromOffset(0, 1),
-            Size = UDim2.fromOffset(HeaderW, 25),
+            Pos = UDim2.fromOffset(0, 0),
+            Size = UDim2.fromOffset(Column.Width, 40),
             Color = "Section",
             Round = 10,
-            Z = 3
-        })
-
-        Items.HeaderFill = MakeFrame({
-            Parent = Items.Header.Instance,
-            Pos = UDim2.fromOffset(0, 15),
-            Size = UDim2.fromOffset(HeaderW, 10),
-            Color = "Section",
             Z = 3
         })
 
         Items.Label = MakeText({
-            Parent = Items.Header.Instance,
+            Parent = Items.Frame.Instance,
             Text = Section.Name,
             TextSize = 15,
-            Anchor = Vector2.new(0, 0.5),
-            Pos = UDim2.new(0, 13, 0.5, 1),
-            Size = UDim2.fromOffset(HeaderTextW + 6, 20),
+            Anchor = Vector2.new(0, 0),
+            Pos = UDim2.fromOffset(13, 7),
+            Size = UDim2.new(1, -26, 0, 20),
             Color = "Text",
-            Z = 4
-        })
-
-        local function SyncHeader()
-            local Bounds = math.ceil(Items.Label.Instance.TextBounds.X)
-            if Bounds <= 0 then return end
-
-            HeaderTextW = Bounds
-            HeaderW = Bounds + 26
-
-            Items.Label.Instance.Size = UDim2.fromOffset(Bounds + 6, 20)
-            Items.Header.Instance.Size = UDim2.fromOffset(HeaderW, 25)
-            Items.HeaderFill.Instance.Size = UDim2.fromOffset(HeaderW, 10)
-        end
-
-        Library:Connect(Items.Label.Instance:GetPropertyChangedSignal("TextBounds"), SyncHeader)
-        task.defer(SyncHeader)
-
-        Items.Frame = MakeFrame({
-            Parent = Items.Holder.Instance,
-            Pos = UDim2.fromOffset(0, 26),
-            Size = UDim2.fromOffset(Column.Width, 14),
-            Color = "Section",
-            Round = 10,
-            Z = 3
-        })
-
-        Items.BodyFill = MakeFrame({
-            Parent = Items.Frame.Instance,
-            Pos = UDim2.fromOffset(0, 0),
-            Size = UDim2.fromOffset(10, 10),
-            Color = "Section",
-            Z = 3
+            Z = 5
         })
 
         Section.Items = Items
 
         function Section:Reflow()
-            local Y = 8
+            local Y = 34
             local Visible = 0
 
             for _, Data in Section.Rows do
@@ -4059,7 +4021,7 @@ end
 
             Items.Frame.Instance.Size = UDim2.fromOffset(Section.Width, FrameHeight)
             Items.Holder.Instance.Visible = Visible > 0
-            Section.Height = Visible > 0 and (26 + FrameHeight) or 0
+            Section.Height = Visible > 0 and FrameHeight or 0
             Items.Holder.Instance.Size = UDim2.fromOffset(Section.Width, math.max(Section.Height, 1))
 
             Column:Reflow()
