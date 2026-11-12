@@ -20,7 +20,7 @@ local Library = { } do
 
     local LocalPlayer = Players.LocalPlayer
     local GuiInset = GuiService:GetGuiInset().Y
-    local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+    local IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
     local GetHui = gethui or function()
         return cloneref(game:GetService("CoreGui"))
@@ -900,6 +900,7 @@ do
     ToggleGui.DisplayOrder = 100000
     ToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
     ToggleGui.Parent = GetHui()
+    ToggleGui.Enabled = IsMobile
 
     local ToggleButton = Instance.new("TextButton")
     ToggleButton.Name = "Toggle"
@@ -3183,27 +3184,20 @@ end
         function Window:LayoutRail()
             local Count = #Window.Tabs
             if Count == 0 then return end
-
             local Padding = 8
             local Spacing = 6
-            local Available = RailW - (Padding * 2) - (Spacing * math.max(Count - 1, 0))
-            local ActiveTab = Window.Current
-            local ActiveWanted = ActiveTab and ActiveTab.ExpandedW or 0
-            local CollapsedWanted = 36 * math.max(Count - 1, 0)
-            local ActiveWidth = ActiveWanted
-            local CollapsedWidth = 36
-
-            if ActiveWanted + CollapsedWanted > Available then
-                CollapsedWidth = math.max(28, math.floor((Available - math.min(ActiveWanted, 120)) / math.max(Count - 1, 1)))
-                ActiveWidth = math.max(CollapsedWidth, math.min(ActiveWanted, Available - CollapsedWidth * math.max(Count - 1, 0)))
+            local Available = math.max(0, RailW - Padding * 2 - Spacing * math.max(Count - 1, 0))
+            local Desired = 0
+            for _, Tab in Window.Tabs do
+                Desired += Tab.ExpandedW
             end
-
+            local Scale = Desired > Available and Available / math.max(Desired, 1) or 1
             local X = Padding
             for _, Tab in Window.Tabs do
-                local Width = Tab.Active and ActiveWidth or CollapsedWidth
+                local Width = math.max(48, math.floor(Tab.ExpandedW * Scale))
                 Tab.Items.Row.Instance.Position = UDim2.fromOffset(X, 3)
                 Tab.Items.Row.Instance.Size = UDim2.fromOffset(Width, 34)
-                -- Active page is shown by the button itself; no underline indicator.
+                Tab.Items.Label.Instance.TextTransparency = 0
                 X += Width + Spacing
             end
         end
@@ -3417,7 +3411,7 @@ end
             Truncate = true,
             Z = 5
         })
-        Items.Label.Instance.TextTransparency = 1
+        Items.Label.Instance.TextTransparency = 0
 
         Items.Hit = MakeButton({
             Parent = Items.Row.Instance,
@@ -3485,8 +3479,8 @@ end
                 ImageColor3 = Active and Library.Theme.Accent or Library.Theme.DimIcon
             })
 
-            Items.Row:Tween({ BackgroundTransparency = Active and 0 or 1, Size = UDim2.fromOffset(Active and Tab.ExpandedW or Tab.CollapsedW, 40) })
-            Items.Label:Tween({ TextTransparency = Active and 0 or 1 })
+            Items.Row:Tween({ BackgroundTransparency = Active and 0 or 1 })
+            Items.Label:Tween({ TextTransparency = 0 })
             Items.Bar.Instance.Visible = false
             task.defer(function() Window:LayoutRail() end)
         end
@@ -4769,7 +4763,8 @@ end
         Items.Knob = MakeKnob(Items.Track.Instance)
 
         function Slider:Set(Value, Instant)
-            local Clamped = math.clamp(Value, Slider.Min, Slider.Max)
+            local Numeric = tonumber(Value) or tonumber(Slider.Default) or Slider.Min
+            local Clamped = math.clamp(Numeric, Slider.Min, Slider.Max)
             Slider.Value = Library:Round(Clamped, Slider.Decimals)
 
             if Slider.Flag then
@@ -4777,7 +4772,7 @@ end
             end
 
             local Span = Slider.Max - Slider.Min
-            local Fraction = Span == 0 and 0 or (Slider.Value - Slider.Min) / Span
+            local Fraction = Span == 0 and 0 or ((tonumber(Slider.Value) or Slider.Min) - Slider.Min) / Span
             local Info = Instant and TweenInfo.new(0) or SlideInfo
 
             Library:Tween({ Size = UDim2.fromOffset(Fraction * TrackW, 10) }, Info, Items.Fill.Instance)
