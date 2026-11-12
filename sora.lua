@@ -20,7 +20,7 @@ local Library = { } do
 
     local LocalPlayer = Players.LocalPlayer
     local GuiInset = GuiService:GetGuiInset().Y
-    local IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+    local IsMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled and not UserInputService.MouseEnabled
 
     local GetHui = gethui or function()
         return cloneref(game:GetService("CoreGui"))
@@ -437,12 +437,14 @@ local Library = { } do
     end
 
     Library.Round = function(Self, Number, Float)
-        Float = Float or 1
-
+        Number = tonumber(Number) or 0
+        Float = tonumber(Float) or 1
+        if Number ~= Number or Number == math.huge or Number == -math.huge then Number = 0 end
+        if Float <= 0 or Float ~= Float or Float == math.huge then Float = 1 end
         local Result = math.floor(Number / Float + 0.5) * Float
-        local Places = math.max(0, math.ceil(-math.log(Float, 10)))
-
-        return tonumber(string.format("%." .. Places .. "f", Result))
+        if Result ~= Result or Result == math.huge or Result == -math.huge then return 0 end
+        local Places = math.max(0, math.min(8, math.floor(-math.log(Float, 10) + 0.000001)))
+        return tonumber(string.format("%." .. tostring(Places) .. "f", Result)) or 0
     end
 
     Library.Tween = function(Self, Properties, Info, RawItem)
@@ -891,7 +893,7 @@ local Library = { } do
         DisplayOrder = 1001
     })
 
--- Floating UI toggle button (mobile + PC)
+-- Floating UI toggle button (mobile only)
 do
     local ToggleGui = Instance.new("ScreenGui")
     ToggleGui.Name = "ZolarFloatingToggle"
@@ -899,21 +901,26 @@ do
     ToggleGui.IgnoreGuiInset = true
     ToggleGui.DisplayOrder = 100000
     ToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-    ToggleGui.Parent = GetHui()
+    local GuiParent = GetHui()
+    for _, OldGui in ipairs(GuiParent:GetChildren()) do
+        if OldGui:IsA("ScreenGui") and OldGui.Name == "ZolarFloatingToggle" then
+            OldGui:Destroy()
+        end
+    end
+    ToggleGui.Parent = GuiParent
     ToggleGui.Enabled = IsMobile
 
-    local ToggleButton = Instance.new("TextButton")
+    local ToggleButton = Instance.new("ImageButton")
     ToggleButton.Name = "Toggle"
     ToggleButton.Parent = ToggleGui
     ToggleButton.Size = UDim2.fromOffset(52, 52)
     ToggleButton.Position = UDim2.new(0, 18, 0.5, -26)
-    ToggleButton.BackgroundColor3 = Color3.fromRGB(180, 25, 25)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
     ToggleButton.BorderSizePixel = 0
     ToggleButton.AutoButtonColor = false
-    ToggleButton.Text = "UI"
-    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    ToggleButton.TextSize = 16
-    ToggleButton.Font = Enum.Font.GothamBold
+    ToggleButton.Image = "rbxassetid://88104226085275"
+    ToggleButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.ScaleType = Enum.ScaleType.Fit
     ToggleButton.Active = true
     ToggleButton.ZIndex = 100000
 
@@ -924,7 +931,7 @@ do
     local Stroke = Instance.new("UIStroke")
     Stroke.Thickness = 1
     Stroke.Transparency = 0.25
-    Stroke.Color = Color3.fromRGB(235, 70, 70)
+    Stroke.Color = Color3.fromRGB(215, 215, 215)
     Stroke.Parent = ToggleButton
 
     local dragging = false
@@ -1376,39 +1383,35 @@ end
     end
 
     local function AttachDrag(Hit, Handlers)
-        local Watcher
         local Active = false
-
+        local TouchInput = nil
+        Hit.Instance.Active = true
         Hit:Connect("InputBegan", function(Input)
-            local IsClick = Input.UserInputType == Enum.UserInputType.MouseButton1
-            local IsTouch = Input.UserInputType == Enum.UserInputType.Touch
-
-            if not IsClick and not IsTouch then return end
-
+            local Kind = Input.UserInputType
+            if Kind ~= Enum.UserInputType.MouseButton1 and Kind ~= Enum.UserInputType.Touch then return end
             Active = true
+            TouchInput = Kind == Enum.UserInputType.Touch and Input or nil
             Handlers.OnGrab(Input)
-
-            if Watcher then return end
-
-            Watcher = Input.Changed:Connect(function()
-                if Input.UserInputState ~= Enum.UserInputState.End then return end
-
-                Active = false
-
-                if Handlers.OnRelease then Handlers.OnRelease() end
-
-                Watcher:Disconnect()
-                Watcher = nil
-            end)
         end)
-
         Library:Connect(UserInputService.InputChanged, function(Input)
-            local IsMove = Input.UserInputType == Enum.UserInputType.MouseMovement
-            local IsTouch = Input.UserInputType == Enum.UserInputType.Touch
-
-            if (IsMove or IsTouch) and Active then
-                Handlers.OnMove(Input)
+            if not Active then return end
+            if TouchInput then
+                if Input ~= TouchInput then return end
+            elseif Input.UserInputType ~= Enum.UserInputType.MouseMovement then
+                return
             end
+            Handlers.OnMove(Input)
+        end)
+        Library:Connect(UserInputService.InputEnded, function(Input)
+            if not Active then return end
+            if TouchInput then
+                if Input ~= TouchInput then return end
+            elseif Input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+                return
+            end
+            Active = false
+            TouchInput = nil
+            if Handlers.OnRelease then Handlers.OnRelease() end
         end)
     end
 
@@ -2525,7 +2528,7 @@ end
             Tabs = { },
             Current = nil,
             ContentW = W - 30,
-            ContentH = H - 96,
+            ContentH = ContentAreaH,
             ColW = ColW,
             Col2X = Col2X,
             Items = { }
@@ -2559,11 +2562,20 @@ end
             Z = 1
         })
 
-        Items.Rail = MakeFrame({
+        Items.Rail = Library:Create("ScrollingFrame", {
             Parent = Items.Main.Instance,
-            Pos = UDim2.fromOffset(10, RailY),
+            Name = "SoraPageNavigation",
+            Position = UDim2.fromOffset(10, RailY),
             Size = UDim2.fromOffset(RailW, RailH),
-            Z = 4
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = Library.Theme.DimText,
+            ScrollingDirection = Enum.ScrollingDirection.X,
+            ScrollingEnabled = true,
+            CanvasSize = UDim2.fromOffset(0, 0),
+            Active = true,
+            ZIndex = 4
         })
 
         Items.SubBar = MakeFrame({
@@ -2624,10 +2636,50 @@ end
         })
 
         Items.Title.Instance.Text = "Sora"
+        Items.HubIcon.Instance.Image = "rbxassetid://88104226085275"
+        Items.HubIcon.Instance.ImageColor3 = Color3.new(1, 1, 1)
         Items.HubIcon.Instance.Visible = true
         Items.HubIcon.Instance.Size = UDim2.fromOffset(22, 22)
         Items.HubIcon.Instance.Position = UDim2.fromOffset(12, math.floor((TopH - 22) / 2))
-        Items.Title.Instance.Position = UDim2.fromOffset(42, 0)
+        Items.Title.Instance.Position = UDim2.fromOffset(42, 2)
+        Items.Title.Instance.Size = UDim2.fromOffset(math.floor(W * 0.48), 24)
+        Items.Title.Instance.Text = tostring(Window.Name or Params.Name or "Sora")
+        local ExpiryValue = Params.ExpiresAt or Params.ExpireAt
+        local ExpiryLabel = Params.ExpiryText or Params.ExpireText
+        if ExpiryValue or ExpiryLabel then
+            local Expiry = MakeText({
+                Parent = Items.TopBar.Instance,
+                Text = "",
+                TextSize = 11,
+                Pos = UDim2.fromOffset(42, 27),
+                Size = UDim2.fromOffset(math.floor(W * 0.62), 17),
+                Color = "DimText",
+                Align = Enum.TextXAlignment.Left,
+                Truncate = true,
+                Z = 4
+            })
+            Items.Expiry = Expiry
+            local function UpdateExpiry()
+                if ExpiryLabel then
+                    Expiry.Instance.Text = tostring(ExpiryLabel)
+                else
+                    local Remaining = math.max(0, (tonumber(ExpiryValue) or 0) - os.time())
+                    local Days = math.floor(Remaining / 86400)
+                    local Hours = math.floor((Remaining % 86400) / 3600)
+                    Expiry.Instance.Text = Remaining == 0 and "Expired" or string.format("Expires in %dd %02dh", Days, Hours)
+                end
+            end
+            UpdateExpiry()
+            if ExpiryValue and not ExpiryLabel then
+                task.spawn(function()
+                    while Expiry.Instance.Parent do
+                        task.wait(60)
+                        if not Expiry.Instance.Parent then break end
+                        UpdateExpiry()
+                    end
+                end)
+            end
+        end
 
         -- Top search removed. Keep tiny hidden placeholders so older code paths stay compatible.
         Items.Search = MakeFrame({ Parent = Items.TopBar.Instance, Size = UDim2.fromOffset(0, 0), Z = 3 })
@@ -3182,24 +3234,15 @@ end
         end
 
         function Window:LayoutRail()
-            local Count = #Window.Tabs
-            if Count == 0 then return end
-            local Padding = 8
-            local Spacing = 6
-            local Available = math.max(0, RailW - Padding * 2 - Spacing * math.max(Count - 1, 0))
-            local Desired = 0
+            local X = 8
             for _, Tab in Window.Tabs do
-                Desired += Tab.ExpandedW
-            end
-            local Scale = Desired > Available and Available / math.max(Desired, 1) or 1
-            local X = Padding
-            for _, Tab in Window.Tabs do
-                local Width = math.max(48, math.floor(Tab.ExpandedW * Scale))
+                local Width = math.max(64, Tab.ExpandedW)
                 Tab.Items.Row.Instance.Position = UDim2.fromOffset(X, 3)
                 Tab.Items.Row.Instance.Size = UDim2.fromOffset(Width, 34)
                 Tab.Items.Label.Instance.TextTransparency = 0
-                X += Width + Spacing
+                X += Width + 6
             end
+            Items.Rail.Instance.CanvasSize = UDim2.fromOffset(math.max(0, X + 2), 0)
         end
 
         function Window:FitSubBar(Instant)
@@ -3212,11 +3255,12 @@ end
             if #Tab.Subs == 0 then return end
 
             local ContentScale = Library:GetScreenScale()
-            local Content = Tab.SubLayout.AbsoluteContentSize.X / ContentScale + 16
+            local Content = Tab.SubLayout.AbsoluteContentSize.X + 20
             local Overflow = Content > MaxSubW
             local Row = Tab.Items.SubRow.Instance
-            Row.ScrollingEnabled = Overflow
+            Row.ScrollingEnabled = true
             Row.ScrollBarThickness = Overflow and 3 or 0
+            Row.CanvasSize = UDim2.fromOffset(math.max(0, Content), 0)
         end
 
         function Window:LayoutSubBar(Instant)
@@ -3352,8 +3396,8 @@ end
         local Items = { }
         local Index = #Window.Tabs
         local TextW = math.ceil(MeasureText(Tab.Name, 14, 180, UiFont).X)
-        local CollapsedW = 36
-        local ExpandedW = math.min(160, 34 + TextW + 12)
+        local ExpandedW = math.min(170, 44 + TextW)
+        local CollapsedW = ExpandedW
         Tab.CollapsedW = CollapsedW
         Tab.ExpandedW = ExpandedW
         local RowY = 5
@@ -3425,7 +3469,7 @@ end
             ScrollBarThickness = 0,
             ScrollBarImageColor3 = Library.Theme.Accent,
             ScrollingDirection = Enum.ScrollingDirection.X,
-            ScrollingEnabled = false,
+            ScrollingEnabled = true,
             Selectable = false,
             Active = true,
             AutomaticCanvasSize = Enum.AutomaticSize.X,
@@ -3435,7 +3479,7 @@ end
             BorderSizePixel = 0
         }):AddToTheme({ ScrollBarImageColor3 = "Accent" })
 
-        Items.SubRow.Instance.Visible = true
+        Items.SubRow.Instance.Visible = false
 
         Items.SubLayout = Library:Create("UIListLayout", {
             Parent = Items.SubRow.Instance,
@@ -3513,7 +3557,7 @@ end
 
             if Window.Current then
                 Window.Current:SetVisual(false)
-                Window.Current.Items.SubRow.Instance.Visible = true
+                Window.Current.Items.SubRow.Instance.Visible = false
 
                 if Window.Current.Current then
                     Window.Current.Current:Hide()
@@ -3524,6 +3568,9 @@ end
             Tab:SetVisual(true)
             Items.SubRow.Instance.Visible = true
 
+            for _, OtherTab in Window.Tabs do
+                OtherTab.Items.SubRow.Instance.Visible = OtherTab == Tab
+            end
             EnterFirstSub()
             Window:LayoutSubBar()
         end
@@ -3627,10 +3674,8 @@ end
             SubTab.ExpandedW = ExpandedW
             Items.Label.Instance.Size = UDim2.fromOffset(Bounds + 8, 20)
 
-            if Tab.Current == SubTab then
-                Items.Pill.Instance.Size = UDim2.fromOffset(ExpandedW, 36)
-                Window:FitSubBar(true)
-            end
+            Items.Pill.Instance.Size = UDim2.fromOffset(ExpandedW, 36)
+            if Window.Current == Tab then Window:FitSubBar(true) end
         end
 
         Library:Connect(Items.Label.Instance:GetPropertyChangedSignal("TextBounds"), SyncWidth)
@@ -3692,7 +3737,7 @@ end
 
         function SubTab:SetVisual(Active, Instant)
             Library:StampResting(Items.Pill.Instance, "BackgroundTransparency", Active and 0 or 1)
-            Library:StampResting(Items.Label.Instance, "TextTransparency", Active and 0 or 1)
+            Library:StampResting(Items.Label.Instance, "TextTransparency", 0)
 
             local Info = Instant and TweenInfo.new(0)
             or TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
@@ -3700,7 +3745,7 @@ end
             local Width = ExpandedW
 
             Library:Tween({ Size = UDim2.fromOffset(Width, 36) }, Info, Items.Pill.Instance)
-            Library:Tween({ TextTransparency = Active and 0 or 1 }, Info, Items.Label.Instance)
+            Library:Tween({ TextTransparency = 0 }, Info, Items.Label.Instance)
 
             Items.Icon:ChangeItemTheme({ ImageColor3 = Active and "Accent" or "DimIcon" })
             Items.Icon:Tween({
@@ -3820,97 +3865,37 @@ end
 
         function SubTab:Show()
             SubTab.ShowToken += 1
-
-            local Token = SubTab.ShowToken
             SubTab.Active = true
-
             StopPageTween()
             StopRowTweens()
-
             Items.Page:CancelFade()
             Items.Page:HardRestore()
             Items.Page.Instance.Parent = Window.Items.Content.Instance
             Items.Page.Instance.Position = UDim2.fromOffset(0, 0)
             Items.Page.Instance.Visible = true
-
-            Library:SafeCall(SubTab.PageIntro)
-
-            if #SubTab.Sections == 0 then return end
-
             LayoutPage()
-
-            local Order = 0
-
             for _, Column in SubTab.Columns do
                 for _, Section in Column.Sections do
-                    Order += 1
-                    PrimeParts(Section)
-
+                    Section.Items.Holder.Instance.Visible = true
                     for _, Data in Section.Rows do
-                        Data.Frame:CancelFade()
-                        Data.Frame.Instance.Visible = false
+                        Data.Frame.Instance.Visible = Data.Visible ~= false
+                        Data.Frame.Instance.Position = UDim2.fromOffset(0, Data.Y)
                     end
-
-                    local Slot = Order
-
-                    task.delay((Slot - 1) * SectionStep, function()
-                        if SubTab.ShowToken ~= Token or not SubTab.Active then return end
-
-                        RevealParts(Section)
-
-                        for RowIndex, Data in Section.Rows do
-                            if Data.Visible == false then continue end
-
-                            task.delay(RowIndex * RowStep, function()
-                                local Home = UDim2.fromOffset(0, Data.Y)
-
-                                Data.Frame.Instance.Visible = true
-
-                                if SubTab.ShowToken ~= Token or not SubTab.Active then
-                                    Data.Frame.Instance.Position = Home
-                                    return
-                                end
-
-                                Data.Frame.Instance.Position = UDim2.fromOffset(RowSlide, Data.Y)
-                                Data.Move = Library:Tween({ Position = Home }, RowIn, Data.Frame.Instance)
-                                Data.Frame:FadeDescendants(true)
-                            end)
-                        end
-                    end)
                 end
             end
+            Library:SafeCall(SubTab.PageIntro)
         end
 
         function SubTab:Hide(OnDone)
             SubTab.Active = false
             SubTab.ShowToken += 1
-
-            Library:SafeCall(SubTab.PageOutro)
-
-            StopRowTweens()
-
-            ForEachRow(function(Data)
-                Data.Frame:CancelFade()
-            end)
-
             StopPageTween()
-
-            PageTween = Library:Tween({
-                Position = UDim2.fromOffset(-PageSlide, 0)
-            }, Sink, Items.Page.Instance)
-
-            Items.Page:FadeDescendants(false, function()
-                if not SubTab.Active then
-                    StopPageTween()
-                    Items.Page:ResetFade()
-                    CleanPage()
-
-                    Items.Page.Instance.Visible = false
-                    Items.Page.Instance.Parent = Library.UnusedHolder.Instance
-                end
-
-                if OnDone then Library:SafeCall(OnDone) end
-            end)
+            StopRowTweens()
+            Items.Page:CancelFade()
+            Items.Page.Instance.Visible = false
+            Items.Page.Instance.Parent = Library.UnusedHolder.Instance
+            Library:SafeCall(SubTab.PageOutro)
+            if OnDone then Library:SafeCall(OnDone) end
         end
 
         function SubTab:SnapVisible()
@@ -4169,6 +4154,7 @@ end
             Z = 6
         })
         Items.Circle.Instance.TextTransparency = 1
+        Items.Circle.Instance.Visible = false
 
         Items.Hit = MakeButton({
             Parent = Row.Instance,
@@ -4190,11 +4176,12 @@ end
             local Info = Instant and TweenInfo.new(0) or TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
             Library:Tween({ BackgroundColor3 = Library.Theme[BoxKey] }, Info, Items.Box.Instance)
             Library:Tween({ TextColor3 = Library.Theme[LabelKey] }, Info, Items.Label.Instance)
-            Library:Tween({ TextTransparency = State and 0 or 1 }, Info, Items.Circle.Instance)
+            Items.Circle.Instance.TextTransparency = State and 0 or 1
+            Items.Circle.Instance.Visible = State
         end
 
         function Toggle:Set(Bool)
-            Toggle.Value = Bool and true or false
+            Toggle.Value = (Bool == true)
 
             if Toggle.Flag then
                 Library.Flags[Toggle.Flag] = Toggle.Value
@@ -4745,10 +4732,10 @@ end
 
         local Slider = {
             Name = Params.Name or "Slider",
-            Min = Params.Min or 0,
-            Max = Params.Max or 100,
+            Min = tonumber(Params.Min) or 0,
+            Max = tonumber(Params.Max) or 100,
             Default = SliderDefault,
-            Decimals = Params.Decimals or 1,
+            Decimals = tonumber(Params.Decimals) or 1,
             Suffix = Params.Suffix or "",
             Flag = Params.Flag,
             Callback = Params.Callback or function() end,
@@ -4763,16 +4750,20 @@ end
         Items.Knob = MakeKnob(Items.Track.Instance)
 
         function Slider:Set(Value, Instant)
-            local Numeric = tonumber(Value) or tonumber(Slider.Default) or Slider.Min
-            local Clamped = math.clamp(Numeric, Slider.Min, Slider.Max)
-            Slider.Value = Library:Round(Clamped, Slider.Decimals)
+            local Min = tonumber(Slider.Min) or 0
+            local Max = tonumber(Slider.Max) or 100
+            if Max < Min then Min, Max = Max, Min end
+            local Numeric = tonumber(Value) or tonumber(Slider.Default) or Min
+            if Numeric ~= Numeric or Numeric == math.huge or Numeric == -math.huge then Numeric = Min end
+            local Clamped = math.clamp(Numeric, Min, Max)
+            Slider.Value = Library:Round(Clamped, 10 ^ -math.clamp(Slider.Decimals, 0, 8))
 
             if Slider.Flag then
                 Library.Flags[Slider.Flag] = Slider.Value
             end
 
-            local Span = Slider.Max - Slider.Min
-            local Fraction = Span == 0 and 0 or ((tonumber(Slider.Value) or Slider.Min) - Slider.Min) / Span
+            local Span = Max - Min
+            local Fraction = Span == 0 and 0 or math.clamp(((tonumber(Slider.Value) or Min) - Min) / Span, 0, 1)
             local Info = Instant and TweenInfo.new(0) or SlideInfo
 
             Library:Tween({ Size = UDim2.fromOffset(Fraction * TrackW, 10) }, Info, Items.Fill.Instance)
@@ -4788,7 +4779,9 @@ end
 
         local function Calculate(Input)
             local Fraction = AxisFraction(Input, Items.Track.Instance, "X")
-            return Slider.Min + (Slider.Max - Slider.Min) * Fraction
+            local Min = tonumber(Slider.Min) or 0
+            local Max = tonumber(Slider.Max) or 100
+            return Min + (Max - Min) * (tonumber(Fraction) or 0)
         end
 
         local function Apply(Input)
@@ -4820,7 +4813,7 @@ end
                     if not Slider.Sliding then
                         local Ok, Value = pcall(SliderLiveProvider)
                         if Ok and type(Value) == "number" then
-                            local Next = Library:Round(math.clamp(Value, Slider.Min, Slider.Max), Slider.Decimals)
+                            local Next = Library:Round(math.clamp(Value, Slider.Min, Slider.Max), 10 ^ -math.clamp(Slider.Decimals, 0, 8))
                             if Next ~= Slider.Value then Slider:Set(Next, true) end
                         end
                     end
@@ -4839,10 +4832,10 @@ end
 
         local Slider = {
             Name = Params.Name or "Range",
-            Min = Params.Min or 0,
-            Max = Params.Max or 100,
+            Min = tonumber(Params.Min) or 0,
+            Max = tonumber(Params.Max) or 100,
             Default = Params.Default,
-            Decimals = Params.Decimals or 1,
+            Decimals = tonumber(Params.Decimals) or 1,
             Suffix = Params.Suffix or "",
             Flag = Params.Flag,
             Callback = Params.Callback or function() end,
@@ -4873,8 +4866,8 @@ end
             MinValue = math.clamp(MinValue or Slider.Min, Slider.Min, Slider.Max)
             MaxValue = math.clamp(MaxValue or Slider.Max, Slider.Min, Slider.Max)
 
-            MinValue = Library:Round(MinValue, Slider.Decimals)
-            MaxValue = Library:Round(MaxValue, Slider.Decimals)
+            MinValue = Library:Round(MinValue, 10 ^ -math.clamp(Slider.Decimals, 0, 8))
+            MaxValue = Library:Round(MaxValue, 10 ^ -math.clamp(Slider.Decimals, 0, 8))
 
             if MinValue > MaxValue then
                 MinValue, MaxValue = MaxValue, MinValue
